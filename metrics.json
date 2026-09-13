@@ -1,0 +1,141 @@
+{
+  "scenarios": 8,
+  "expectations_met": 8,
+  "total_cost_units": 40.0,
+  "cost_if_everything_called": 184.0,
+  "saved_pct": 78.3,
+  "camara_apis": [
+    "number-verification",
+    "sim-swap",
+    "device-swap",
+    "device-status",
+    "location-verification",
+    "location-retrieval",
+    "congestion-insights",
+    "quality-on-demand"
+  ],
+  "tools": [
+    "verify_number",
+    "check_sim_swap",
+    "check_device_swap",
+    "check_reachability",
+    "verify_location",
+    "retrieve_location",
+    "query_congestion",
+    "reserve_quality"
+  ],
+  "min_calls": 0,
+  "max_calls": 4,
+  "avg_calls": 1.9,
+  "levels_seen": [
+    "accept",
+    "challenge",
+    "incident",
+    "suspend",
+    "verify"
+  ],
+  "per_scenario": [
+    {
+      "id": "shift-start-clean",
+      "title": "Rider opens a shift",
+      "level": "verify",
+      "expected": "verify",
+      "met": true,
+      "calls": 2,
+      "spend": 4.0,
+      "apis": [
+        "number-verification",
+        "sim-swap"
+      ]
+    },
+    {
+      "id": "shift-start-handover",
+      "title": "The account changed hands overnight",
+      "level": "suspend",
+      "expected": "suspend",
+      "met": true,
+      "calls": 3,
+      "spend": 7.0,
+      "apis": [
+        "number-verification",
+        "sim-swap",
+        "device-swap"
+      ]
+    },
+    {
+      "id": "delivery-trusted",
+      "title": "A trusted rider marks a delivery complete",
+      "level": "accept",
+      "expected": "accept",
+      "met": true,
+      "calls": 0,
+      "spend": 0.0,
+      "apis": []
+    },
+    {
+      "id": "delivery-verified",
+      "title": "A newer rider marks a delivery complete",
+      "level": "verify",
+      "expected": "verify",
+      "met": true,
+      "calls": 1,
+      "spend": 2.0,
+      "apis": [
+        "location-verification"
+      ]
+    },
+    {
+      "id": "delivery-lobby-partial",
+      "title": "The network answers PARTIAL",
+      "level": "verify",
+      "expected": "verify",
+      "met": true,
+      "calls": 2,
+      "spend": 6.0,
+      "apis": [
+        "location-verification",
+        "location-retrieval"
+      ]
+    },
+    {
+      "id": "delivery-far-off",
+      "title": "Marked complete 1.2 km from the door",
+      "level": "challenge",
+      "expected": "challenge",
+      "met": true,
+      "calls": 1,
+      "spend": 2.0,
+      "apis": [
+        "location-verification"
+      ]
+    },
+    {
+      "id": "delivery-rented-account",
+      "title": "Disputed delivery from a swapped handset",
+      "level": "suspend",
+      "expected": "suspend",
+      "met": true,
+      "calls": 2,
+      "spend": 5.0,
+      "apis": [
+        "location-verification",
+        "device-swap"
+      ]
+    },
+    {
+      "id": "rider-silent",
+      "title": "A rider goes quiet",
+      "level": "incident",
+      "expected": "incident",
+      "met": true,
+      "calls": 4,
+      "spend": 14.0,
+      "apis": [
+        "device-status",
+        "location-retrieval",
+        "congestion",
+        "qod"
+      ]
+    }
+  ]
+}

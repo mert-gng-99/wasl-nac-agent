@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: wasl-nac-agent
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      # Simulator mode needs no credentials, so a blueprint deploy just works.
+      - key: NAC_MODE
+        value: simulator
+      - key: NAC_DEV_MODE
+        value: "true"
+      - key: DB_PATH
+        value: /tmp/ledger.db
+      # Set these in the Render dashboard to switch on the live gateway or the
+      # Gemini planner. All are optional; the app runs without any of them.
+      # The Gemini planner needs AGENT_PROVIDER=gemini *and* a key.
+      - key: NAC_RAPIDAPI_KEY
+        sync: false
+      - key: AGENT_PROVIDER
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false

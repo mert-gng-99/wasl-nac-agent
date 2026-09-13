@@ -1,0 +1,23 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.env
+data/*.db
+data/*.db-wal
+data/*.db-shm
+.pytest_cache/
+.coverage
+htmlcov/
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+# Local agent/editor tooling state. None of it belongs in a submitted repo.
+.claude-flow/
+.claude/
+.ruflo/
+.swarm/
+.hive-mind/
