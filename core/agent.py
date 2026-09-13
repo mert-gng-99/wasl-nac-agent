@@ -450,8 +450,10 @@ class LlmPlanner:
             # seeing the deterministic fallback. Retry only server-side faults:
             # a rate limit or a bad request will not heal by being repeated, and
             # hammering a quota is worse than falling back.
-            if _is_transient(exc):
-                time.sleep(1.5)
+            for delay in _TRANSIENT_BACKOFF:
+                if not _is_transient(exc):
+                    break
+                time.sleep(delay)
                 try:
                     return self._plan_with_model(case, facts, used, budget, registry)
                 except Exception as retry_exc:  # noqa: BLE001
@@ -930,6 +932,10 @@ class Agent:
 # Server-side faults worth one retry. 429 is deliberately absent: a rate limit
 # is the provider asking for less traffic, not more.
 _TRANSIENT_STATUS = (500, 502, 503, 504)
+
+# A free model tier answers 503 in bursts. These waits cost nothing against
+# the generation quota, because a refused request was never generated.
+_TRANSIENT_BACKOFF = (1.5, 4.0, 9.0)
 
 
 def _is_transient(exc: Exception) -> bool:
