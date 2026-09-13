@@ -25,7 +25,8 @@ def request(base: str, path: str, payload=None):
         data = json.dumps(payload).encode("utf-8")
         headers["Content-Type"] = "application/json"
     req = Request(base + path, data=data, headers=headers, method="POST" if data else "GET")
-    with urlopen(req, timeout=30) as response:  # nosec B310 - explicit demo URL
+    # A free instance plus several model turns comfortably exceeds 30s.
+    with urlopen(req, timeout=180) as response:  # nosec B310 - explicit demo URL
         return json.loads(response.read().decode("utf-8"))
 
 

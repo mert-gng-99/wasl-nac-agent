@@ -646,17 +646,37 @@ class Agent:
             move = planner.plan(case, facts, used, budget, self.registry)
 
             if move.kind == "decide":
-                final = move
-                skipped.extend(move.declined)
-                steps.append(
-                    AgentStep(
-                        n=step_no,
-                        kind="decide",
-                        reasoning=move.reasoning,
-                        note="planner submitted a decision",
+                # A floor on evidence, alongside the floor on the outcome. A
+                # model sometimes answers on turn one with nothing gathered,
+                # which produces the no-evidence verdict rather than the real
+                # one. If the policy itself still wants a check at this point,
+                # that check is not the planner's to skip. When the policy is
+                # content (a trusted rider, a small transfer) it proposes
+                # nothing and deciding immediately is exactly right.
+                required = self._required_check(case, facts, used, budget)
+                if required is not None and not evidence:
+                    tool_name, args, reason = required
+                    move = PlannedMove(
+                        kind="tool",
+                        tool=tool_name,
+                        args=args,
+                        reasoning=(
+                            "the policy still requires this check, so the "
+                            "planner's early decision was held back: %s" % reason
+                        ),
                     )
-                )
-                break
+                else:
+                    final = move
+                    skipped.extend(move.declined)
+                    steps.append(
+                        AgentStep(
+                            n=step_no,
+                            kind="decide",
+                            reasoning=move.reasoning,
+                            note="planner submitted a decision",
+                        )
+                    )
+                    break
 
             # A tool that was already attempted will answer the same way twice.
             # Asking again is a loop - it happens when consent is withheld and
@@ -810,6 +830,29 @@ class Agent:
             latency_ms=result.latency_ms,
             source=result.source,
         )
+
+    def _required_check(
+        self,
+        case: Case,
+        facts: Dict[str, Any],
+        used: List[str],
+        budget: Budget,
+    ) -> Optional[Tuple[str, Dict[str, Any], str]]:
+        """The check the policy still wants, if it wants one and can afford it."""
+        try:
+            proposal = self.policy.next_tool(case, facts, used)
+        except Exception:  # noqa: BLE001 - a policy fault must not end the case
+            return None
+        if proposal is None:
+            return None
+        tool_name = proposal[0]
+        try:
+            tool = self.registry.get(tool_name)
+        except KeyError:
+            return None
+        if not budget.can_afford(tool.cost_units):
+            return None
+        return proposal
 
     @staticmethod
     def _observe(planner: Any, tool_name: str, payload: Dict[str, Any]) -> None:

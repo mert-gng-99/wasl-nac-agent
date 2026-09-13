@@ -628,3 +628,80 @@ def test_a_model_that_invents_a_level_no_longer_costs_the_whole_case():
     assert decision.planner == "gemini"
     assert decision.planner_error == ""
     assert decision.level == POLICY.levels[-1]
+
+
+def test_a_planner_cannot_skip_a_check_the_policy_still_requires():
+    """An evidence floor, to match the outcome floor.
+
+    A live Gemini run answered on turn one with nothing gathered, which lands
+    on the no-evidence verdict instead of the real one.
+    """
+    from types import SimpleNamespace
+
+    profile = LineProfile(msisdn=SUBJECT, latitude=25.0, longitude=55.0)
+    client, _ = _platform(profile)
+
+    class DecidesImmediately:
+        def __init__(self):
+            self.turns = 0
+
+        def plan(self, case, facts, used, budget, registry):
+            self.turns += 1
+            return PlannedMove(
+                kind="decide",
+                level=POLICY.levels[0],
+                action="skip everything",
+                rationale="deciding without looking",
+                confidence=0.9,
+            )
+
+    config = AgentConfig(provider="policy", max_steps=6)
+    decision = Agent(client, POLICY, config, planner=DecidesImmediately()).run(_any_case())
+
+    # The first scenario of every product is one the policy wants a check for,
+    # so the early decision must have been held back at least once.
+    assert decision.evidence, "the policy's required check was skipped"
+    assert any(
+        "still requires this check" in (s.get("reasoning") or "")
+        for s in decision.steps
+    )
+
+
+def test_an_early_decision_stands_when_the_policy_wants_nothing():
+    """Restraint is still allowed: no required check means decide now."""
+    from types import SimpleNamespace
+
+    class NothingRequired:
+        name = "nothing required"
+        levels = POLICY.levels
+        kind = POLICY.kind
+        tool_names = POLICY.tool_names
+        budget_units = POLICY.budget_units
+
+        def system_prompt(self, case): return "test"
+        def describe_case(self, case): return "test"
+        def interpret(self, tool, result, facts): return {}
+        def next_tool(self, case, facts, used): return None
+        def decide(self, case, facts):
+            return (POLICY.levels[0], "nothing to do", "no check was worth buying", 0.9)
+
+    profile = LineProfile(msisdn=SUBJECT, latitude=25.0, longitude=55.0)
+    client, _ = _platform(profile)
+
+    class DecidesImmediately:
+        def plan(self, case, facts, used, budget, registry):
+            return PlannedMove(
+                kind="decide",
+                level=POLICY.levels[0],
+                action="nothing to do",
+                rationale="nothing could change the answer",
+                confidence=0.9,
+            )
+
+    decision = Agent(
+        client, NothingRequired(), AgentConfig(provider="policy", max_steps=4),
+        planner=DecidesImmediately(),
+    ).run(_any_case())
+
+    assert decision.evidence == [], "no check was required, so none should run"
+    assert decision.level == POLICY.levels[0]
