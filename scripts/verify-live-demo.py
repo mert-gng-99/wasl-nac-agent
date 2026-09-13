@@ -57,20 +57,28 @@ def main(argv: list[str]) -> int:
             ))
         if decision.get("planner_error"):
             return fail("decision has a Gemini provider error")
-        sources = sorted({item.get("source") for item in decision.get("evidence", []) if item.get("source")})
-        if "live" not in sources:
-            return fail("no Nokia NaC evidence tagged live; saw %r" % sources)
-
         after = request(base, "/api/health").get("agent", {})
         if after.get("last_decision_planner") != "gemini" or after.get("model_verified") is not True:
             return fail("health did not confirm the successful Gemini decision")
+
+        sources = sorted({item.get("source") for item in decision.get("evidence", []) if item.get("source")})
     except (HTTPError, URLError, TimeoutError, ValueError) as exc:
         return fail("could not verify deployed demo: %s" % exc)
 
-    print("READY: Gemini planned %s and Nokia NaC returned live evidence (%s)." % (
-        scenario_id, ", ".join(sources),
-    ))
-    return 0
+    # Two independent proofs. The agent layer is proven by a real model turn,
+    # the network layer by a live CAMARA answer, and a deployment can honestly
+    # have one without the other. Reporting them together hides which half is
+    # actually missing.
+    print("AGENT READY: Gemini planned %s and the runtime accepted its decision." % scenario_id)
+    if "live" in sources:
+        print("NETWORK READY: Nokia NaC returned live evidence (%s)." % ", ".join(sources))
+        return 0
+    print(
+        "NETWORK NOT PROVEN: evidence came from %s. Set NAC_MODE=hybrid and "
+        "NAC_RAPIDAPI_KEY on the deployment to show live CAMARA answers too."
+        % ", ".join(sources)
+    )
+    return 2
 
 
 if __name__ == "__main__":
