@@ -99,7 +99,10 @@ class AgentConfig:
     """
 
     provider: Literal["gemini", "policy"] = "policy"
-    model: str = "gemini-2.5-flash"
+    # Google AI Studio retires model ids without notice: gemini-2.5-flash,
+    # which the guide names, now answers 404 on generateContent. Pinned to a
+    # current flash model and overridable with AGENT_MODEL.
+    model: str = "gemini-3.5-flash"
     api_key: str = ""
     temperature: float = 0.1
     max_steps: int = 8
@@ -129,7 +132,7 @@ class AgentConfig:
             provider = "policy"
         return cls(
             provider=provider,  # type: ignore[arg-type]
-            model=(os.getenv("AGENT_MODEL") or "gemini-2.5-flash").strip(),
+            model=(os.getenv("AGENT_MODEL") or "gemini-3.5-flash").strip(),
             api_key=key,
             temperature=_env_float("AGENT_TEMPERATURE", 0.1),
             max_steps=_env_int("AGENT_MAX_STEPS", 8),

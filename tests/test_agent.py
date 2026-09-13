@@ -224,7 +224,9 @@ def test_gemini_requires_an_explicit_provider_opt_in(monkeypatch):
     offline = AgentConfig.from_env()
     assert offline.provider == "policy"
     assert offline.llm_enabled is False
-    assert offline.model == "gemini-2.5-flash"
+    # The pinned model tracks whatever Google AI Studio currently serves.
+    # gemini-2.5-flash, which the tooling guide names, now answers 404.
+    assert offline.model == "gemini-3.5-flash"
 
     monkeypatch.setenv("AGENT_PROVIDER", "gemini")
     enabled = AgentConfig.from_env()
@@ -515,3 +517,73 @@ def test_tool_names_all_exist():
     registry = ToolRegistry(list(POLICY.tool_names))
     assert len(registry) == len(POLICY.tool_names)
     assert registry.apis(), "a product with no CAMARA APIs is not a submission"
+
+
+# --- transient provider faults ----------------------------------------------
+
+
+def test_only_server_side_faults_are_retried():
+    """A rate limit must not be retried; an overloaded provider should be."""
+    from core.agent import _is_transient
+
+    class ProviderError(Exception):
+        def __init__(self, status=None, message=""):
+            super().__init__(message)
+            if status is not None:
+                self.status_code = status
+
+    assert _is_transient(ProviderError(503, "overloaded")) is True
+    assert _is_transient(ProviderError(500, "internal")) is True
+    assert _is_transient(ProviderError(429, "rate limited")) is False
+    assert _is_transient(ProviderError(404, "model retired")) is False
+
+    # Pydantic AI reports the status inside the message, so the text path has
+    # to make the same distinction.
+    assert _is_transient(Exception("ModelHTTPError: status_code: 503, model_name: x"))
+    assert not _is_transient(Exception("ModelHTTPError: status_code: 429, RESOURCE_EXHAUSTED"))
+    assert not _is_transient(Exception("ModelHTTPError: status_code: 404, no longer available"))
+    assert not _is_transient(ValueError("model proposed an unavailable CAMARA tool"))
+
+
+def test_a_transient_fault_is_retried_once_then_still_falls_back_honestly():
+    """One retry, and if it fails again the run is labelled a fallback."""
+    profile = LineProfile(msisdn=SUBJECT, latitude=25.0, longitude=55.0)
+    client, _ = _platform(profile)
+
+    class Overloaded:
+        def __init__(self):
+            self.attempts = 0
+
+        def run_sync(self, *args, **kwargs):
+            self.attempts += 1
+            raise RuntimeError("ModelHTTPError: status_code: 503, model_name: test")
+
+    config = AgentConfig(provider="gemini", api_key="test-key", max_steps=2)
+    runner = Overloaded()
+    planner = LlmPlanner(POLICY, config, runner=runner)
+    decision = Agent(client, POLICY, config, planner=planner).run(_any_case())
+
+    assert runner.attempts >= 2, "a 503 should be retried once before giving up"
+    assert decision.planner == "policy-fallback"
+    assert "503" in decision.planner_error
+
+
+def test_a_rate_limit_is_not_retried():
+    profile = LineProfile(msisdn=SUBJECT, latitude=25.0, longitude=55.0)
+    client, _ = _platform(profile)
+
+    class RateLimited:
+        def __init__(self):
+            self.attempts = 0
+
+        def run_sync(self, *args, **kwargs):
+            self.attempts += 1
+            raise RuntimeError("ModelHTTPError: status_code: 429, RESOURCE_EXHAUSTED")
+
+    config = AgentConfig(provider="gemini", api_key="test-key", max_steps=2)
+    runner = RateLimited()
+    planner = LlmPlanner(POLICY, config, runner=runner)
+    decision = Agent(client, POLICY, config, planner=planner).run(_any_case())
+
+    assert runner.attempts == 1, "a quota error must not be hammered"
+    assert decision.planner == "policy-fallback"

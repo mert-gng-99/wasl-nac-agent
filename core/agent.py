@@ -414,6 +414,17 @@ class LlmPlanner:
         try:
             return self._plan_with_model(case, facts, used, budget, registry)
         except Exception as exc:  # noqa: BLE001 - a demo must not die on the model
+            # A free-tier provider returns 503 under load often enough that one
+            # retry is the difference between a judge seeing the model plan and
+            # seeing the deterministic fallback. Retry only server-side faults:
+            # a rate limit or a bad request will not heal by being repeated, and
+            # hammering a quota is worse than falling back.
+            if _is_transient(exc):
+                time.sleep(1.5)
+                try:
+                    return self._plan_with_model(case, facts, used, budget, registry)
+                except Exception as retry_exc:  # noqa: BLE001
+                    exc = retry_exc
             self.last_error = self._bounded_error("%s: %s" % (type(exc).__name__, exc))
             # Once the model fails, keep the case entirely on the deterministic
             # path. A later recovery must not make a mixed run look like a
@@ -840,6 +851,21 @@ class Agent:
             guardrail_note=note,
             label=case.label,
         )
+
+
+# Server-side faults worth one retry. 429 is deliberately absent: a rate limit
+# is the provider asking for less traffic, not more.
+_TRANSIENT_STATUS = (500, 502, 503, 504)
+
+
+def _is_transient(exc: Exception) -> bool:
+    status = getattr(exc, "status_code", None)
+    if isinstance(status, int):
+        return status in _TRANSIENT_STATUS
+    text = str(exc)
+    if "429" in text or "RESOURCE_EXHAUSTED" in text:
+        return False
+    return any("status_code: %d" % code in text for code in _TRANSIENT_STATUS)
 
 
 def _unique(items: List[str]) -> List[str]:
