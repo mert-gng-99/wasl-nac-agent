@@ -45,7 +45,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal, Optional, Protocol, Tuple
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from .camara import ApiResult, CamaraClient, ConsentError, Device
 from .config import AgentConfig
@@ -234,6 +234,37 @@ class _ModelProposal(BaseModel):
     confidence: float = Field(default=0.7, description="Decision confidence from zero to one.")
 
 
+def _proposal_model_for(levels: Tuple[str, ...]) -> type:
+    """Constrain ``level`` to this policy's ladder in the schema itself.
+
+    Left as a free string, a model will eventually submit a plausible word the
+    policy does not use - a real run proposed "allow" against a ladder of
+    accept/verify/challenge/incident/suspend, and the whole case fell back to
+    the deterministic planner. Naming the permitted values in the output schema
+    turns that failure into something the model cannot express.
+    """
+    if not levels:
+        return _ModelProposal
+    cached = _PROPOSAL_CACHE.get(levels)
+    if cached is None:
+        cached = create_model(
+            "ModelProposal_" + "_".join(levels),
+            __base__=_ModelProposal,
+            level=(
+                Literal[levels],  # type: ignore[valid-type]
+                Field(
+                    default=levels[0],
+                    description="Outcome level when kind is decide. Use exactly one of these.",
+                ),
+            ),
+        )
+        _PROPOSAL_CACHE[levels] = cached
+    return cached
+
+
+_PROPOSAL_CACHE: Dict[Tuple[str, ...], type] = {}
+
+
 class PolicyPlanner:
     """Deterministic planner driven by the idea's own escalation ladder.
 
@@ -377,7 +408,7 @@ class LlmPlanner:
         model = GoogleModel(self.config.model, provider=provider)
         self._runner = PydanticAgent(
             model,
-            output_type=_ModelProposal,
+            output_type=_proposal_model_for(tuple(self.policy.levels)),
             instructions=self._instruction(case),
             # A failed structured response should enter the explicit policy
             # fallback below, not make unbounded hidden model retries.

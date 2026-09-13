@@ -587,3 +587,44 @@ def test_a_rate_limit_is_not_retried():
 
     assert runner.attempts == 1, "a quota error must not be hammered"
     assert decision.planner == "policy-fallback"
+
+
+def test_the_model_schema_only_permits_this_policy_ladder():
+    """A real run once proposed 'allow'. The schema must make that impossible."""
+    from core.agent import _proposal_model_for
+
+    Proposal = _proposal_model_for(tuple(POLICY.levels))
+    schema = Proposal.model_json_schema()
+    assert schema["properties"]["level"]["enum"] == list(POLICY.levels)
+
+    ok = Proposal(kind="decide", level=POLICY.levels[-1], action="act", rationale="why")
+    assert ok.level == POLICY.levels[-1]
+
+    with pytest.raises(Exception):
+        Proposal(kind="decide", level="allow", action="act", rationale="why")
+
+
+def test_a_model_that_invents_a_level_no_longer_costs_the_whole_case():
+    """With the ladder in the schema, the planner still runs on a valid level."""
+    from types import SimpleNamespace
+
+    profile = LineProfile(msisdn=SUBJECT, latitude=25.0, longitude=55.0)
+    client, _ = _platform(profile)
+
+    class Decides:
+        def run_sync(self, *args, **kwargs):
+            return SimpleNamespace(output={
+                "kind": "decide",
+                "level": POLICY.levels[-1],
+                "action": "escalate",
+                "rationale": "the model decided this",
+                "confidence": 0.9,
+            })
+
+    config = AgentConfig(provider="gemini", api_key="test-key", max_steps=3)
+    planner = LlmPlanner(POLICY, config, runner=Decides())
+    decision = Agent(client, POLICY, config, planner=planner).run(_any_case())
+
+    assert decision.planner == "gemini"
+    assert decision.planner_error == ""
+    assert decision.level == POLICY.levels[-1]
