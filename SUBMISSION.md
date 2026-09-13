@@ -92,7 +92,11 @@ sleep after inactivity, so open the link once shortly before judging.
 
 ## Repository URL
 
-**YOU.** The GitHub URL. `scripts/init-repo.sh` will create and push it.
+Already created and pushed. Paste:
+
+```
+https://github.com/mert-gng-99/wasl-nac-agent
+```
 
 ---
 
@@ -115,14 +119,14 @@ file's contents.
 
 ---
 
-# The four things only you can do
+# What is left for you
 
 | Field | What is needed | Time |
 | --- | --- | --- |
 | Parent Submission | Pick Wasl from the dropdown | seconds |
 | Demo Link | Deploy, using the Render blueprint in the bundle | ~10 min |
 | Video URL | Record the 3-minute script in DEMO_SCRIPT.md | ~20 min |
-| Repository URL | Run `scripts/init-repo.sh` | ~2 min |
+| Repository URL | Done. The repo is created and pushed. | done |
 
 Snapshots are optional but cheap, and a judge scrolling a list of submissions
 sees them before they read anything.
