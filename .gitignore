@@ -21,3 +21,13 @@ htmlcov/
 .ruflo/
 .swarm/
 .hive-mind/
+
+# Submission paperwork. These are working files for filling in the hackathon
+# form, not part of the product, and a public repository reads better without
+# them. They stay in the local bundle.
+SUBMISSION.md
+SUBMISSION_DESCRIPTION.md
+DEMO_SCRIPT.md
+INSTRUCTIONS_TO_RUN.md
+scripts/init-repo.sh
+snapshots/README.md
